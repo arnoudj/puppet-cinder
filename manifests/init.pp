@@ -25,6 +25,18 @@
 #  [*log_facility*]
 #    (optional) Syslog facility to receive log lines.
 #    Defaults to 'LOG_USER'
+# [*use_ssl*]
+#    (optional) Enable SSL on the API server
+#   Defaults to false, not set
+# [*cert_file*]
+#    (optinal) Certificate file to use when starting API server securely
+#    Defaults to false, not set
+# [*key_file*]
+#    (optional) Private key file to use when starting API server securely
+#    Defaults to false, not set
+# [*ca_file*]
+#    (optional) CA certificate file to use to verify connecting clients
+#   Defaults to false, not set
 # [*rpc_backend*]
 #    (optional) what rpc/queuing service to use
 #    Defaults to impl_kombu (rabbitmq)
@@ -83,6 +95,10 @@ class ceilometer(
   $verbose             = false,
   $use_syslog          = false,
   $log_facility        = 'LOG_USER',
+  $use_ssl             = false,
+  $ca_file             = false,
+  $cert_file           = false,
+  $key_file            = false,
   $rpc_backend         = 'ceilometer.openstack.common.rpc.impl_kombu',
   $rabbit_host         = '127.0.0.1',
   $rabbit_port         = 5672,
@@ -113,6 +129,15 @@ class ceilometer(
   validate_string($metering_secret)
 
   include ::ceilometer::params
+
+  if $use_ssl {
+    if !$cert_file {
+      fail('The cert_file parameter is required when use_ssl is set to true')
+    }
+    if !$key_file {
+      fail('The key_file parameter is required when use_ssl is set to true')
+    }
+  }
 
   if $kombu_ssl_ca_certs and !$rabbit_use_ssl {
     fail('The kombu_ssl_ca_certs parameter requires rabbit_use_ssl to be set to true')
@@ -162,6 +187,28 @@ class ceilometer(
   }
 
   Package['ceilometer-common'] -> Ceilometer_config<||>
+
+  if $use_ssl {
+    ceilometer_config {
+      'ssl/cert_file' : value => $cert_file;
+      'ssl/key_file' :  value => $key_file;
+    }
+    if $ca_file {
+      ceilometer_config { 'ssl/ca_file' :
+        value => $ca_file,
+      }
+    } else {
+      ceilometer_config { 'ssl/ca_file' :
+        ensure => absent,
+      }
+    }
+  } else {
+    ceilometer_config {
+      'ssl/cert_file' : ensure => absent;
+      'ssl/key_file' :  ensure => absent;
+      'ssl/ca_file' :   ensure => absent;
+    }
+  }
 
   if $rpc_backend == 'ceilometer.openstack.common.rpc.impl_kombu' {
 
